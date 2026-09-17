@@ -1,0 +1,1290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Can a Machine Write the Next Transistor Equation?</title>
+<meta name="description" content="At 3 nanometers the hand-written equations behind every chip simulation miss by 70 percent, and neural networks crash the simulator. PRISM-UDE keeps the physics, learns only what it misses, then distills the network into one readable formula that runs inside SPICE.">
+<meta property="og:title" content="Can a Machine Write the Next Transistor Equation?">
+<meta property="og:description" content="PRISM-UDE embeds a small neural network inside a physics-based transistor model, cuts the error more than sixfold, then replaces the network with a single closed-form expression validated inside SPICE.">
+<meta property="og:image" content="https://vizuaraai.github.io/prism-ude/assets/film-poster.png">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<style>
+  :root{
+    --paper:#fcfbf7; --panel:#ffffff; --sink:#f6f4ec;
+    --ink:#16130d; --ink2:#3a352b; --muted:#6d665a; --faint:#a49c8c;
+    --line:#e7e2d5; --line2:#d9d3c3;
+    --slate:#155e8c; --shelf:#c0641a; --good:#1c7a55; --hot:#b3006b;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:400 19px/1.72 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  nav{
+    position:sticky; top:0; z-index:40; background:rgba(252,251,247,.96);
+    backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+  }
+  nav .bar{
+    max-width:1080px; margin:0 auto; padding:0 24px; height:58px;
+    display:flex; align-items:center; gap:14px;
+  }
+  nav .mark{display:flex; align-items:center; gap:11px; text-decoration:none; color:var(--ink); min-width:0}
+  nav .mark img{width:26px; height:26px; display:block}
+  nav .mark span{
+    font:600 15px/1.2 var(--sans); letter-spacing:.01em; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  nav .mark small{display:block; font:500 11.5px/1.3 var(--sans); color:var(--faint); letter-spacing:.06em; text-transform:uppercase}
+  nav .navlinks{margin-left:auto; display:flex; gap:8px; align-items:center}
+  nav .navlinks a{
+    color:var(--ink2); text-decoration:none; font:600 13.5px/1 var(--sans);
+    padding:8px 13px; border-radius:99px; white-space:nowrap;
+  }
+  nav .navlinks a:hover{background:var(--sink); color:var(--slate)}
+  nav .navlinks a.pill{border:1px solid var(--line2)}
+  nav .navlinks a.pill:hover{border-color:var(--slate)}
+  @media(max-width:620px){ nav .navlinks a.hidesm{display:none} }
+  #progress{position:absolute; left:0; bottom:-1px; height:2px; background:var(--slate); width:0%}
+  .art{max-width:720px; margin:0 auto; padding:0 24px}
+  .wide{max-width:940px; margin-left:auto; margin-right:auto; padding:0 24px}
+  header.hero{padding:72px 0 8px}
+  .kicker{font:600 12.5px/1 var(--sans); letter-spacing:.18em; text-transform:uppercase; color:var(--hot); margin-bottom:22px}
+  h1{font-size:clamp(36px,5.6vw,56px); line-height:1.1; margin:0 0 20px; font-weight:600; letter-spacing:-.012em}
+  .dek{font-size:clamp(20px,2.5vw,24px); line-height:1.5; color:var(--muted); font-style:italic; margin:0 0 30px}
+  .byline{display:flex; align-items:center; gap:13px; font:500 15px/1.4 var(--sans); color:var(--ink2); padding-bottom:8px}
+  .byline img{width:38px; height:38px}
+  .byline .dot{color:var(--faint)}
+  .byline a{color:var(--slate); text-decoration:none}
+  h2{font-size:clamp(25px,3.2vw,31px); line-height:1.25; margin:64px 0 18px; font-weight:600; letter-spacing:-.008em}
+  h3{font-size:21px; margin:40px 0 12px; font-weight:600}
+  p{margin:0 0 22px}
+  a{color:var(--slate)}
+  .pull{
+    border-left:4px solid var(--hot); background:var(--sink);
+    padding:20px 26px; margin:34px 0; font-size:20.5px; line-height:1.55;
+  }
+  .aside{font-size:16px; color:var(--muted); font-style:italic}
+  .toc{background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:24px 28px 18px; margin:40px 0 6px}
+  .toc .toc-title{font:600 12.5px/1 var(--sans); letter-spacing:.18em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:16px}
+  .toc ol{margin:0; padding:0; list-style:none; columns:2; column-gap:40px}
+  .toc li{break-inside:avoid; margin:0 0 10px}
+  .toc a{font:500 15.5px/1.45 var(--sans); color:var(--ink2); text-decoration:none;
+    display:block; padding-left:24px; text-indent:-24px}
+  .toc a:hover{color:var(--slate)}
+  .toc .n{font:600 12px/1 var(--mono); color:var(--faint);
+    display:inline-block; width:24px; text-indent:0}
+  @media(max-width:620px){.toc ol{columns:1}}
+  hr.sep{border:0; border-top:1px solid var(--line); margin:64px auto; max-width:720px}
+  figure.vm{margin:36px 0; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:20px 20px 16px}
+  figure.vm figcaption{font:400 15px/1.55 var(--sans); color:var(--muted); margin-top:12px}
+  figure.vm figcaption b{color:var(--ink2)}
+  .chartbox{position:relative}
+  .chart-scroll{overflow-x:auto}
+  .chart-scroll svg{display:block}
+  .chips{display:flex; flex-wrap:wrap; gap:14px 20px; margin:2px 2px 12px; font:500 13.5px/1 var(--sans); color:var(--ink2)}
+  .chips span{display:inline-flex; align-items:center; gap:7px}
+  .chips i{width:14px; height:4px; border-radius:2px; display:inline-block}
+  .chips i.dotk{width:9px; height:9px; border-radius:50%}
+  .tip{
+    position:absolute; pointer-events:none; z-index:5; display:none;
+    background:var(--ink); color:#fdfcf9; border-radius:6px; padding:8px 11px;
+    font:500 12.5px/1.5 var(--sans); white-space:nowrap; box-shadow:0 4px 14px rgba(20,16,8,.18);
+  }
+  .tip b{font-family:var(--mono); font-weight:600}
+  .replay{
+    position:absolute; right:10px; top:8px; z-index:6;
+    font:600 12px/1 var(--sans); color:var(--muted); background:var(--sink);
+    border:1px solid var(--line2); border-radius:99px; padding:6px 12px; cursor:pointer;
+  }
+  .replay:hover{color:var(--slate); border-color:var(--slate)}
+  svg text{font-family:var(--sans)}
+  svg .num{font-family:var(--mono)}
+  .statline{display:flex; flex-wrap:wrap; gap:14px 40px; margin:26px 0}
+  .statline .v{font:600 34px/1.1 var(--mono); letter-spacing:-.02em}
+  .statline .k{font:400 14px/1.45 var(--sans); color:var(--muted); max-width:220px; margin-top:4px}
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:28px 0}
+  @media(max-width:700px){.two{grid-template-columns:1fr}}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:20px 22px}
+  .card h4{margin:0 0 10px; font:600 16px/1.3 var(--sans)}
+  .card.known{border-top:3px solid var(--faint)}
+  .card.new{border-top:3px solid var(--slate)}
+  .card ul{margin:0; padding-left:19px; font-size:16.5px; line-height:1.6}
+  .card li{margin:7px 0}
+  ul.lims{max-width:none; padding-left:21px}
+  ul.lims li{margin:12px 0}
+  video{width:100%; border:1px solid var(--line); border-radius:6px; background:#000; display:block}
+  .filmframe{position:relative; aspect-ratio:16/9; width:100%; cursor:pointer;
+    border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#000}
+  .filmframe img{width:100%; height:100%; object-fit:cover; display:block}
+  .filmframe video{position:absolute; inset:0; width:100%; height:100%; border:0; border-radius:0}
+  .filmframe .playbtn{position:absolute; left:50%; top:50%; width:84px; height:84px;
+    transform:translate(-50%,-50%); border-radius:50%; background:rgba(22,19,13,.82);
+    box-shadow:0 6px 24px rgba(20,16,8,.35); transition:background .15s}
+  .filmframe .playbtn::after{content:''; position:absolute; left:55%; top:50%;
+    transform:translate(-50%,-50%); border-style:solid; border-width:15px 0 15px 25px;
+    border-color:transparent transparent transparent #fdfcf9}
+  .filmframe:hover .playbtn{background:var(--slate)}
+  .filmframe.live{cursor:default}
+  pre{background:var(--sink); border:1px solid var(--line); border-radius:6px; padding:16px 18px; overflow-x:auto; font-size:14px; line-height:1.6; font-family:var(--mono)}
+  table{border-collapse:collapse; width:100%; background:var(--panel); font-size:16px}
+  .tablewrap{overflow-x:auto; margin:26px 0; border:1px solid var(--line); border-radius:6px}
+  th,td{padding:11px 14px; text-align:left; border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  th{font:600 12.5px/1.3 var(--sans); letter-spacing:.05em; text-transform:uppercase; color:var(--muted); background:var(--sink)}
+  td.num{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .eq{background:var(--sink); border:1px solid var(--line); border-radius:6px;
+    padding:16px 20px; margin:24px 0; font-family:var(--mono); font-size:15.5px;
+    line-height:1.8; overflow-x:auto; white-space:nowrap}
+  .widgetrow{display:flex; flex-wrap:wrap; gap:12px 28px; align-items:center;
+    font:500 14px/1.4 var(--sans); color:var(--ink2); margin:4px 2px 10px}
+  .widgetrow label{display:flex; align-items:center; gap:10px}
+  .widgetrow input[type=range]{width:170px; accent-color:var(--slate)}
+  .widgetrow .val{font-family:var(--mono); font-weight:600; min-width:64px}
+  footer{padding:56px 0 80px; color:var(--muted); font:400 15px/1.6 var(--sans)}
+  footer img{width:30px; height:30px; margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="bar">
+    <a class="mark" href="#top">
+      <img src="assets/vizuara-logo.png" alt="Vizuara">
+      <span>Vizuara Research<small>prism-ude</small></span>
+    </a>
+    <div class="navlinks">
+      <a href="#film" class="hidesm">The film</a>
+      <a href="https://arxiv.org/abs/2609.13200" class="hidesm">arXiv</a>
+      <a href="assets/paper.pdf" class="pill">Paper&nbsp;PDF</a>
+    </div>
+  </div>
+  <div id="progress"></div>
+</nav>
+
+<header class="hero art" id="top">
+  <div class="kicker">Compact models &middot; scientific machine learning</div>
+  <h1>Can a Machine Write the Next Transistor Equation?</h1>
+  <p class="dek">Every chip is rehearsed inside a simulator that stands each
+  transistor in for a small hand-written equation. At 3 nanometers those
+  equations miss by 70 percent, and the obvious fix, a neural network, crashes
+  the simulator. We kept the physics, let a small network learn only what the
+  physics misses, then deleted the network: symbolic regression rewrote it as
+  one readable formula that runs inside SPICE.</p>
+  <div class="byline">
+    <img src="assets/vizuara-logo.png" alt="">
+    <div>Vizuara Research <span class="dot">&middot;</span> September 2026
+      <span class="dot">&middot;</span> 12 min read
+      <span class="dot">&middot;</span> <a href="#film">or watch the 3&#8209;minute film</a></div>
+  </div>
+</header>
+
+<div class="art">
+
+  <div class="toc" role="navigation" aria-label="Table of contents">
+    <div class="toc-title">Contents</div>
+    <ol>
+      <li><a href="#builttwice"><span class="n">1</span>Every chip is built twice</a></li>
+      <li><a href="#runout"><span class="n">2</span>At 3 nm the equations run out</a></li>
+      <li><a href="#blackbox"><span class="n">3</span>The obvious fix crashes the solver</a></li>
+      <li><a href="#scaffold"><span class="n">4</span>Keep the physics, learn the gap</a></li>
+      <li><a href="#training"><span class="n">5</span>Trained so the network cannot cheat</a></li>
+      <li><a href="#results"><span class="n">6</span>Six times closer, at every temperature</a></li>
+      <li><a href="#distill"><span class="n">7</span>Then delete the network</a></li>
+      <li><a href="#reading"><span class="n">8</span>What the formula seems to say</a></li>
+      <li><a href="#spice"><span class="n">9</span>Back inside SPICE, it survives</a></li>
+      <li><a href="#film"><span class="n">10</span>The film</a></li>
+      <li><a href="#prior"><span class="n">11</span>Where this sits in prior work</a></li>
+      <li><a href="#limits"><span class="n">12</span>What this does not show</a></li>
+      <li><a href="#appendix"><span class="n">13</span>Appendix: a compact model from scratch</a></li>
+      <li><a href="#repro"><span class="n">14</span>Reproduce it</a></li>
+    </ol>
+  </div>
+
+  <h2 id="builttwice">Every chip is built twice</h2>
+
+  <p>Before a chip is manufactured, it is built millions of times in software.
+  A circuit simulator, almost always some descendant of SPICE, assembles the
+  design and solves for every voltage and current, over and over, until the
+  designers trust the timing and the power. But the simulator does not solve
+  quantum mechanics. Each of the billions of transistors is stood in for by a
+  <em>compact model</em>: a short system of closed-form equations, written and
+  calibrated by hand, that answers one question. Given the voltages on the
+  terminals, how much current flows?</p>
+
+  <p>Compact models have a harder job than just being accurate. The simulator
+  finds each operating point with Newton-Raphson iteration, a numerical method
+  that follows derivatives downhill to a solution. That method inherits every
+  mathematical flaw in the model. A kink in a curve, a slope that jumps, a
+  current that wiggles where it should be flat: any of these can send the
+  iteration diverging, and the whole simulation fails to converge. So a
+  transistor equation has to be smooth to arbitrarily many derivatives,
+  monotone where physics says so, and exactly zero where physics says zero.
+  It is applied mathematics under industrial discipline.</p>
+
+  <h2 id="runout">At 3 nm the equations run out</h2>
+
+  <p>For fifty years, physicists kept those equations current by hand, and it
+  worked because transistors were big enough to obey textbook transport. They
+  no longer are. In the 3 nanometer generation the drawn gate length of the
+  FinFET studied here is 15 nanometers. At that scale electrons can cross the
+  channel with few or no scattering events, so current is partly ballistic.
+  Vertical confinement splits the electron energy levels, which shifts the
+  threshold voltage, the gate voltage where the device turns on. The drain
+  terminal reaches electrostatically under the channel and lowers the barrier
+  (drain-induced barrier lowering, or DIBL), so the threshold moves with the
+  drain bias too. None of this has a simple classical expression.</p>
+
+  <p>The industry standard, BSIM-CMG, holds the line by adding parameters:
+  hundreds of coefficients per process, extracted by teams of specialists
+  through multi-variable optimization against reference data, then re-extracted
+  for the next process. The equations still converge beautifully. They simply
+  need an army to keep them honest, and each new node makes the army's job
+  harder.</p>
+
+  <div class="statline">
+    <div><div class="v">15 nm</div><div class="k">drawn gate length of the 3 nm FinFET modeled here</div></div>
+    <div><div class="v">7 decades</div><div class="k">range of drain current in one device, 10<sup>-10</sup> to 10<sup>-3</sup> amperes</div></div>
+    <div><div class="v">100s</div><div class="k">of hand-tuned parameters in a production BSIM model card</div></div>
+  </div>
+
+  <h2 id="blackbox">The obvious fix crashes the solver</h2>
+
+  <p>The modern reflex is to skip the physics: train a neural network on
+  measured or simulated current-voltage data and use it as the model. It fits
+  the training data almost perfectly. It is also, for this job, close to
+  useless, and the paper's own ablation shows why with unusual clarity.</p>
+
+  <p>An unconstrained two-hidden-layer network trained on the same data
+  produced a held-out mean relative error above 20 million percent, because a
+  plain mean-squared-error fit treats the subthreshold decades, the region
+  between 10<sup>-12</sup> and 10<sup>-9</sup> amperes that sets a chip's
+  standby power, as indistinguishable from zero. Worse, at zero drain bias,
+  where a transistor must carry exactly no current, the network invented
+  38.6 milliamps out of nothing. A ghost current like that is not a rounding
+  error; inside a solver it is a hard physical contradiction, and localized
+  derivative anomalies of the same family are exactly what makes Newton-Raphson
+  iteration stagnate or diverge.</p>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chartbox" id="anim-ghost"></div>
+    <figcaption><b>The zero-bias test that black boxes fail.</b> Both models are
+    asked for the current at V<sub>ds</sub> = 0, where the true answer is exactly
+    zero. The physics scaffold is built so its current is pinned to zero there
+    no matter what; the unconstrained network reports 38.6 mA, and the solver's
+    iteration ticker below it diverges. Numbers from ablation A2 of the paper.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <h2 id="scaffold">Keep the physics, learn the gap</h2>
+
+  <p>PRISM-UDE inverts the trade. It keeps the classical transport physics as
+  the rigid skeleton of the model, and embeds a small neural network
+  <em>inside</em> that skeleton, allowed to learn only the piece the physics
+  misses. The construction is called a universal differential equation, or
+  UDE: a known differential system in which one hard-to-specify term is
+  replaced by a learnable function, while everything else stays analytical.</p>
+
+  <p>Concretely, the drain current keeps its drift-diffusion form: current is
+  width times channel charge times carrier mobility times electric field. The
+  charge, the field, and the threshold behavior stay classical (the
+  <a href="#appendix">appendix</a> builds each one from scratch). Only the
+  mobility, the term that says how easily carriers move and where all the
+  strange 3 nm transport hides, becomes a sum: the classical Caughey-Thomas
+  value plus a learned correction.</p>
+
+  <div class="eq">I<sub>ds</sub> = W &middot; Q<sub>inv</sub>(V<sub>gs</sub>,V<sub>ds</sub>,T) &middot; [ &mu;<sub>0</sub>(V<sub>ds</sub>,T) + &Delta;&mu;<sub>NN</sub>(V<sub>gs</sub>,V<sub>ds</sub>,T,N<sub>fin</sub>,L) ] &middot; E<sub>eff</sub>(V<sub>ds</sub>)</div>
+
+  <p>The scaffold is not decoration. Because the charge term goes to zero at
+  zero drain bias, the current is exactly zero there for any value the network
+  outputs. Because every function in the scaffold, including the network's own
+  tanh activations, is smooth to all orders, the solver's derivatives are
+  always defined. The network is a five-input, two-hidden-layer, 64-unit
+  perceptron, about as small as neural networks get, precisely because it has
+  so little left to learn.</p>
+
+  <div class="pull">The scaffold enforces the physics no matter what the
+  network does; the network absorbs only the transport nobody has written
+  down. Then symbolic regression deletes the network.</div>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chartbox" id="anim-ude"></div>
+    <figcaption><b>The equation with a slot in it.</b> The drift-diffusion
+    skeleton draws first: width, charge, mobility, field. Then the mobility
+    term opens and the network settles inside it as an additive correction.
+    The two badges that snap on are the guarantees the scaffold enforces before
+    training even begins: zero current at zero bias, and smoothness to every
+    derivative.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <h2 id="training">Trained in two stages, so the network cannot cheat</h2>
+
+  <p>The training data is the MESD benchmark, a public library of
+  foundry-calibrated BSIM simulations. This work isolates its anonymized 3 nm
+  FinFET partition, called N3A: an NMOS device at gate length 15 nm, swept over
+  gate and drain voltages from 0 to 0.7 volts, temperatures from -40 to
+  125 Celsius, and one to sixteen parallel fins. That makes 175 independent
+  bias trajectories, split 140 for training and 35 held out.</p>
+
+  <p>Training happens in two stages, and the order is the point. In stage one
+  the network is frozen at zero and a particle swarm optimizer, a gradient-free
+  global search, fits only the five classical parameters: threshold voltage,
+  subthreshold ideality, DIBL coefficient, oxide capacitance, low-field
+  mobility. The extracted values are physically sensible for a 3 nm NMOS
+  device: a threshold of 0.189 volts, an ideality factor of 1.19, DIBL of
+  0.103 volts per volt, an oxide capacitance corresponding to about one
+  nanometer of equivalent oxide. Only after these are anchored does stage two
+  unlock the network (Adam for a thousand epochs, then L-BFGS for fine
+  convergence). Anchor first and the network cannot absorb textbook behavior;
+  it is forced to model only the residual.</p>
+
+  <p>One more choice matters as much as the architecture. The loss is computed
+  on the logarithm of the current, not the current itself, so that a factor of
+  two error at 10<sup>-10</sup> amperes costs the optimizer exactly as much as
+  a factor of two at 10<sup>-3</sup>. Train the identical model with an
+  ordinary linear loss and the held-out error degrades from 11 percent to
+  160 percent: a 14.5 times penalty for weighting the decades wrong.</p>
+
+  <h2 id="results">Six times closer, at every temperature</h2>
+
+  <p>On the 35 held-out trajectories, the physics scaffold alone misses by
+  70.33 percent mean relative error. With the network inside, the error falls
+  to 11.01 percent. The distilled formula that eventually replaces the network
+  (next section) lands at 12.38 percent. Training and held-out errors track
+  within 0.6 points, which is what you expect when the residual being learned
+  is genuine systematic physics rather than memorized noise.</p>
+
+  <div class="statline">
+    <div><div class="v">70.33%</div><div class="k">held-out error, classical physics scaffold alone</div></div>
+    <div><div class="v">11.01%</div><div class="k">with the neural residual inside the scaffold</div></div>
+    <div><div class="v">12.38%</div><div class="k">with the network replaced by one formula</div></div>
+  </div>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chips" id="leg-error"></div>
+    <div class="chartbox" id="fig-error"></div>
+    <figcaption><b>Held-out mean relative error across the paper's ablations.</b>
+    The linear-loss variant (A3) and the physics-only baseline (A1) both fail in
+    different ways; the black-box MLP (A2) is off this chart by five orders of
+    magnitude and violates the zero-bias law outright. Hover any bar for the
+    exact value. Data: Tables 3 and 6.</figcaption>
+  </figure>
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chips" id="leg-transfer"></div>
+    <div class="chartbox" id="fig-transfer"></div>
+    <figcaption><b>What the learned residual changes.</b> Drive current versus
+    gate voltage at V<sub>ds</sub> = 0.6 V and 25&nbsp;C, computed live on this
+    page from the paper's own published equations and constants (Tables 2 and 8,
+    Eq. 26). The classical scaffold underestimates strong-inversion current; the
+    learned correction supplies the missing transport. This is the same
+    comparison the paper's Figure 3 makes against the reference data.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <p>The result holds where compact models usually crack. Across the thermal
+  envelope, restricting evaluation to the extremes of the temperature grid
+  (0 and 125 Celsius) gives 6.57 percent error. Retraining on half the
+  trajectories changes the error by half a point, because the scaffold already
+  carries the macroscopic trends and the residual is genuinely low-dimensional.
+  And the subthreshold swing, the derivative quantity that sets off-state
+  leakage and is notoriously fragile in learned models, is reproduced to
+  within 1.4 millivolts per decade of the reference distribution.</p>
+
+  <p>Capacity is not the story either: shrinking the hidden width from 64 to
+  32 to 16 to 8 moves the error only from 11.01 to 14.11 percent. The
+  physics-informed structure, not network size, is doing the work.</p>
+
+  <h2 id="distill">Then delete the network</h2>
+
+  <p>A trained network inside the model still costs matrix evaluations at
+  every solver step, and it still cannot be read. So the final act is
+  distillation: symbolic regression, an evolutionary search over algebraic
+  expressions (the PySR family of genetic programming), is pointed at the
+  trained correction and asked to breed a formula that matches it, using only
+  addition, multiplication, division, logarithms, exponentials, and square
+  roots.</p>
+
+  <p>The search returns a frontier: at each level of expression complexity,
+  the best loss found. Picking from a frontier needs a rule, and the paper's
+  rule is refreshingly plain: take the simplest expression whose loss is
+  within 5 percent of the best found anywhere. The complexity-11 candidate
+  misses that tolerance by 16 percent; the complexity-15 candidate makes it
+  at 3.65 percent, and is deployed.</p>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chartbox" id="fig-pareto"></div>
+    <figcaption><b>The Pareto frontier of bred formulas, Table 7 verbatim.</b>
+    Each point is the best expression found at that complexity; the y axis is
+    the residual loss against the trained network, on a log scale. Loss falls
+    steeply until complexity 9 and flattens after 15. The ringed point is the
+    deployed expression, the simplest within 5 percent of the best loss.
+    Hover for exact values.</figcaption>
+  </figure>
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chartbox" id="anim-distill"></div>
+    <figcaption><b>The network becomes a sentence of algebra.</b> The trained
+    64-unit correction dissolves and the deployed expression, Eq. 26 of the
+    paper, writes itself in its place: a smoothed magnitude of the classical
+    mobility, times a drain-field term that fades with temperature squared,
+    minus a gate-screening logarithm. The final model contains no neural
+    network at all.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <h2 id="reading">What the formula seems to say</h2>
+
+  <p>The deployed correction is one line:</p>
+
+  <div class="eq">&Delta;&mu; = &radic;(&mu;<sub>CT</sub><sup>2</sup> + 10<sup>-6</sup>) &middot; [ (V<sub>ds</sub>/1.2)/&theta;<sub>T</sub><sup>2</sup> &minus; ln( &theta;<sub>T</sub> + 0.06499 / (V<sub>gs</sub>/1.2 + 0.07219) ) ]</div>
+
+  <p>where &mu;<sub>CT</sub> is the classical Caughey-Thomas mobility and
+  &theta;<sub>T</sub> is temperature relative to 300 K. Read term by term, it
+  is suggestive. The square root is a smoothed absolute value, there so the
+  correction stays differentiable through zero, with a floor four decades below
+  the mobility scale so it never distorts real values. The first bracketed term
+  grows with drain bias and dies off as temperature squared, the qualitative
+  signature you would expect if it captured quasi-ballistic velocity overshoot
+  being suppressed by phonon scattering at higher temperature. The logarithm
+  saturates with gate voltage, the shape of vertical-field screening and
+  quantum confinement effects on mobility.</p>
+
+  <p>The paper is explicit about the epistemics, and it is worth repeating:
+  these are candidate physical readings consistent with the fitted data, not
+  mechanisms identified by the regression. A fit to terminal currents cannot,
+  by itself, tell velocity overshoot apart from another mechanism with the
+  same functional shape. What the formula unambiguously is: compact,
+  C<sup>&infin;</sup> smooth, and evaluable by any circuit simulator at
+  algebraic speed. You can also just play with it:</p>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="widgetrow" id="widget-controls">
+      <label>temperature <input type="range" id="wT" min="-40" max="125" value="25" step="1"><span class="val" id="wTv">25 C</span></label>
+      <label>V<sub>ds</sub> <input type="range" id="wVds" min="0.05" max="0.7" value="0.6" step="0.01"><span class="val" id="wVdsv">0.60 V</span></label>
+    </div>
+    <div class="chartbox" id="fig-widget"></div>
+    <figcaption><b>The deployed model, live.</b> Both curves are computed in
+    your browser from the published constants: dashed, the classical scaffold;
+    solid, scaffold plus the distilled correction of Eq. 26. Drag the
+    temperature across its full trained range (-40 to 125&nbsp;C) and watch the
+    correction shrink as &theta;<sub>T</sub><sup>-2</sup> suppresses the
+    drain-field term; drag V<sub>ds</sub> down and the two curves close up, as
+    they must, since the correction is largely a high-field effect.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <h2 id="spice">Back inside SPICE, it survives</h2>
+
+  <p>A formula only counts as a compact model if a real simulator accepts it,
+  so the extracted expression was implemented in LTspice as a behavioral
+  source: a circuit element that evaluates an arbitrary algebraic expression
+  at every solver step. The implementation reproduces, verbatim, the same
+  three smooth guards used in training, including the
+  <span style="font-family:var(--mono)">smooth_abs(x) = sqrt(x&sup2; + 1e-6)</span>
+  operator that replaces every hard absolute value, so the deployed model and
+  the trained model are numerically identical.</p>
+
+  <p>Two tests follow. The DC family of curves sweeps drain voltage at seven
+  gate voltages: the model converges at every bias point, with smooth,
+  monotonically ordered curves and the expected linear-to-saturation knees.
+  Then the hard one: a transient simulation drives the gate with a square wave
+  with sub-nanosecond edges, forcing the solver to re-converge through the
+  full operating range at every timestep. It completes every switching cycle
+  with zero convergence failures and no numerical ringing.</p>
+
+  <p>One honest asterisk, which the paper itself insists on: those SPICE
+  sweeps run up to 1.2 volts, but the training data stops at 0.7. Beyond that,
+  the tests establish that the expression stays smooth, monotone, and
+  convergent, which is the property a solver needs; they say nothing about
+  quantitative accuracy out there, because no reference data exists in the
+  benchmark beyond 0.7 volts.</p>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chips" id="leg-dc"></div>
+    <div class="chartbox" id="fig-dc"></div>
+    <figcaption><b>The deployed formula's DC family of curves, recomputed from
+    the published model.</b> Drain current versus drain voltage at gate voltages
+    from 0.2 to 1.2 volts, the same sweep as the paper's SPICE Figure 6. Biases
+    up to 0.7 V are inside the trained envelope; the shaded region beyond is
+    the numerical-robustness zone, drawn here exactly because the paper is
+    careful to separate the two claims.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <h2 id="film">The film</h2>
+
+  <p>The whole argument in three minutes, narrated over animations of the
+  paper's own numbers.</p>
+
+  <div class="filmframe" id="filmframe" role="button" tabindex="0"
+       aria-label="Play the film">
+    <img src="assets/film-poster.png" alt="The film: the AI that wrote a chip equation, then deleted itself">
+    <span class="playbtn" aria-hidden="true"></span>
+  </div>
+
+  <h2 id="prior">Where this sits in prior work</h2>
+
+  <p>Every ingredient here has a lineage, and the paper is straightforward
+  about it. BSIM-CMG is the industry-standard compact model this work measures
+  itself against, and MESD, the benchmark it trains on, is itself generated by
+  foundry-calibrated BSIM engines. The MIT Virtual Source model showed long ago
+  that small, physical parameter sets can describe quasi-ballistic devices.
+  Neural surrogates for transistors have repeatedly hit sub-percent
+  interpolation error and repeatedly failed on physicality and solver
+  stability. Physics-informed neural networks constrain training with equation
+  residuals but still deploy a network at runtime. Universal differential
+  equations (Rackauckas et al.) formalized embedding a network inside known
+  dynamics, with successes from biochemistry to glacier flow, and Cranmer et
+  al. showed symbolic regression can extract clean algebra from trained
+  networks. The contribution here is the full closed loop for a 3 nm device:
+  scaffold, residual, two-stage training, distillation, and dynamic SPICE
+  validation, ending with no network in the deployed model.</p>
+
+  <div class="two">
+    <div class="card known">
+      <h4>Established before this work</h4>
+      <ul>
+        <li>BSIM-CMG models advanced nodes with hundreds of expert-extracted parameters.</li>
+        <li>Pure neural surrogates fit I-V data well but break physical laws and SPICE convergence.</li>
+        <li>UDEs learn residuals inside known physics in other scientific domains.</li>
+        <li>Symbolic regression can compress trained networks into algebra.</li>
+      </ul>
+    </div>
+    <div class="card new">
+      <h4>New here</h4>
+      <ul>
+        <li><b>The pipeline:</b> MESD data to deployed symbolic expression, automated end to end for a 3 nm FinFET.</li>
+        <li><b>The discipline:</b> two-stage optimization and a log-space loss that together keep the network honest across seven decades.</li>
+        <li><b>The receipt:</b> a 6.4&times; error reduction that survives distillation to one formula within 1.4 points.</li>
+        <li><b>The proof of deployability:</b> DC and sub-nanosecond transient SPICE runs with zero convergence failures.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="limits">What this does not show</h2>
+
+  <ul class="lims">
+    <li><b>The ground truth is simulation, not silicon.</b> MESD is generated
+    by foundry-calibrated BSIM engines, so every accuracy number here is
+    fidelity to an industrial simulator's view of a 3 nm device, in a
+    controlled and reproducible setting. Real measured wafers add line-edge
+    roughness, dopant fluctuation, and instrument noise, and the paper flags
+    that regularizing symbolic regression against measurement noise is open
+    work.</li>
+    <li><b>Transport only.</b> This models DC current-voltage behavior. A
+    production compact model also needs charge conservation and
+    transcapacitances for dynamic power and delay; that is designated future
+    work, and until then the expression pairs with a standard charge core.</li>
+    <li><b>One node, one device type.</b> The constants of Eq. 26 are empirical
+    fits to the anonymized N3A partition, NMOS only. They are not universal
+    physical invariants, and porting to gate-all-around or CFET geometries
+    means changing the scaffold itself.</li>
+    <li><b>Accuracy claims stop at 0.7 volts.</b> Beyond the benchmark's bias
+    ceiling the SPICE results demonstrate numerical robustness, not
+    correctness.</li>
+    <li><b>The physical readings of the formula are candidates.</b> A fit to
+    terminal currents cannot uniquely identify microscopic mechanisms.</li>
+  </ul>
+
+  <h2 id="appendix">Appendix: a compact model from scratch</h2>
+
+  <p>Everything above leans on one stack of classical device physics. Here it
+  is from the beginning, so a reader who has never opened a device textbook
+  can check what the scaffold actually assumes. Ten minutes here and Eq. 26
+  stops being a black box of its own.</p>
+
+  <h3>Current is a product of four things</h3>
+
+  <p>A MOSFET is a switch: a gate electrode over a thin channel between a
+  source and a drain. Its steady current obeys the drift-diffusion form,
+  current = width &times; charge &times; mobility &times; field. Width is
+  geometry (here, the number of parallel fins times the width of each fin).
+  Charge is how many carriers the gate has attracted into the channel.
+  Mobility is how easily they move. Field is how hard the drain pulls them.
+  Each factor gets one classical equation, and each equation is chosen as much
+  for smoothness as for physics.</p>
+
+  <h3>Charge: one formula for off and on</h3>
+
+  <p>Below threshold, channel charge grows exponentially with gate voltage;
+  above it, linearly. Older models stitched the two regimes together, and the
+  stitch was a notorious source of convergence trouble. The scaffold instead
+  uses a unified charge-sheet expression built around
+  softplus, the function ln(1&nbsp;+&nbsp;e<sup>x</sup>), which is exponential
+  on one side, linear on the other, and infinitely smooth at the join. The
+  threshold voltage inside it is not a constant: it slides down with drain
+  bias at 0.103 volts per volt, which is the DIBL extraction from stage one,
+  and shifts with fin count.</p>
+
+  <h3>Mobility: Caughey-Thomas saturation</h3>
+
+  <p>At low field, carriers drift with a constant mobility. Push the field up
+  and their velocity saturates near 10<sup>5</sup> meters per second in
+  silicon. The Caughey-Thomas expression interpolates smoothly between the
+  two regimes, with a temperature exponent that captures why hot silicon
+  conducts worse (more lattice vibrations to scatter off). This is the
+  &mu;<sub>CT</sub> that appears inside Eq. 26, and it is the term the learned
+  correction is added to.</p>
+
+  <h3>Three guards that make it solver-proof</h3>
+
+  <p>The forward model applies three smooth safeguards, and they are part of
+  the model, not cosmetic post-processing. The drain bias entering the charge
+  term is limited by a smooth minimum so charge cannot reverse sign beyond
+  pinch-off. The summed mobility passes through a softplus so it stays
+  positive even if the network output were to overwhelm the baseline. And the
+  current handed to the loss is floored at 10<sup>-15</sup> amperes through a
+  smooth rectifier so the logarithm is always defined. All three are
+  C<sup>&infin;</sup>, and all three are reproduced verbatim in the SPICE
+  implementation.</p>
+
+  <h3>The network, exactly</h3>
+
+  <p>The learned correction is a multilayer perceptron with five normalized
+  inputs (gate voltage, drain voltage, temperature ratio, fin count, gate
+  length), two hidden layers of 64 tanh units, and one linear output, the
+  mobility correction. Tanh is chosen over the more fashionable ReLU for a
+  solver-driven reason: ReLU has a corner at zero, and a corner anywhere in
+  the model is a derivative discontinuity that Newton-Raphson will eventually
+  find. The whole network is a few thousand parameters, and after
+  distillation, it is zero parameters, because it is gone.</p>
+
+</div>
+
+<div class="wide">
+  <figure class="vm">
+    <div class="chartbox" id="anim-pipeline"></div>
+    <figcaption><b>The whole pipeline in one pass.</b> Data from the MESD 3 nm
+    partition flows into the physics scaffold; stage one anchors the classical
+    constants with a particle swarm; stage two trains the residual network
+    under the log-space loss; symbolic regression distills the network into
+    Eq. 26; SPICE validates the result under DC and transient stress. The
+    deployed artifact is the formula alone.</figcaption>
+  </figure>
+</div>
+
+<div class="art">
+
+  <h2 id="repro">Reproduce it</h2>
+
+  <p>The paper is open: <a href="https://arxiv.org/abs/2609.13200">arXiv
+  2609.13200</a> (also mirrored <a href="assets/paper.pdf">here as PDF</a>).
+  The training data is the public MESD benchmark's N3A 3 nm FinFET partition:
+  175 bias trajectories, split 140 train and 35 held out, spanning 0 to 0.7
+  volts on both terminals, -40 to 125 Celsius, and fin counts of 1 to 16.
+  The recipe, in the order the paper runs it:</p>
+
+  <pre>1  fit the scaffold     PSO over {Vth0, m, DIBL, dVth_fin}, network frozen at zero
+2  train the residual   Adam 1e-3, 500 epochs; 1e-4, 500 more; then L-BFGS
+   loss                 mean squared error in log10(current), floor 1e-15 A
+3  distill              PySR-style genetic programming over {+,-,*,/,ln,exp,sqrt}
+   select               simplest expression within 5% of best frontier loss
+4  validate             LTspice behavioral source, DC family + square-wave transient</pre>
+
+  <p class="aside">Every number on this page is from the paper's tables
+  (Tables 2, 3, 5, 6, 7, 8), and every curve is recomputed in this page's own
+  JavaScript from the published equations and constants, so the figures can be
+  audited against the PDF line by line. Authors: Pranavanath Balamurali
+  (UT Austin), Prathamesh Dinesh Joshi, Raj Abhijit Dandekar, Rajat Dandekar,
+  Sreedath Panat (Vizuara AI Labs).</p>
+
+</div>
+
+<footer>
+  <div class="art">
+    <img src="assets/vizuara-logo.png" alt="Vizuara">
+    <div style="margin-bottom:6px; color:var(--ink2)">
+      Pranavanath Balamurali &middot; Prathamesh Dinesh Joshi &middot;
+      Raj Abhijit Dandekar &middot; Rajat Dandekar &middot; Sreedath Panat
+      <span style="color:var(--faint)">(Vizuara AI Labs)</span>
+      &middot; <a href="mailto:research@vizuara.com">research@vizuara.com</a></div>
+    <div>Vizuara Research &middot; September 2026 &middot;
+      <a href="https://arxiv.org/abs/2609.13200">paper</a> &middot;
+      <a href="#film">film</a> &middot;
+      <a href="https://research.vizuara.ai">research.vizuara.ai</a></div>
+  </div>
+</footer>
+
+<script>
+/* ============================================================ shared */
+const C = {slate:'#155e8c', hot:'#b3006b', shelf:'#c0641a', good:'#1c7a55',
+  ink:'#16130d', ink2:'#3a352b', muted:'#6d665a', faint:'#a49c8c',
+  line:'#e7e2d5', line2:'#d9d3c3', paper:'#fcfbf7', panel:'#ffffff', sink:'#f6f4ec'};
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs, parent){
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function txt(parent, x, y, s, attrs){
+  const t = el('text', Object.assign({x, y, fill:C.ink2, 'font-size':14}, attrs||{}), parent);
+  t.textContent = s;
+  return t;
+}
+function svgIn(box, w, h, minW){
+  const scroll = document.createElement('div');
+  scroll.className = 'chart-scroll';
+  box.appendChild(scroll);
+  const s = el('svg', {viewBox:`0 0 ${w} ${h}`, role:'img'}, scroll);
+  s.style.width = '100%';
+  s.style.height = 'auto';
+  s.style.minWidth = (minW||640) + 'px';
+  return s;
+}
+function tween(dur, fn, done){
+  if (REDUCED){ fn(1); if(done) done(); return; }
+  const t0 = performance.now();
+  (function step(now){
+    const p = Math.min(1, (now - t0)/dur);
+    fn(1 - Math.pow(1-p, 3));
+    if (p < 1) requestAnimationFrame(step); else if (done) done();
+  })(t0);
+}
+const onSeen = (node, fn) => {
+  if (REDUCED){ fn(); return; }
+  new IntersectionObserver((es, ob) => {
+    es.forEach(e => { if (e.isIntersecting){ ob.disconnect(); fn(); } });
+  }, {threshold:.35}).observe(node);
+};
+function makeReplay(node, fn){
+  if (REDUCED) return;
+  const b = document.createElement('button');
+  b.className = 'replay'; b.textContent = 'replay';
+  b.onclick = fn;
+  node.appendChild(b);
+}
+function legend(id, items){
+  const n = document.getElementById(id);
+  if (!n) return;
+  items.forEach(([name, color, dash]) => {
+    const s = document.createElement('span');
+    const i = document.createElement('i');
+    if (dash === 'dot') i.className = 'dotk';
+    i.style.background = color;
+    if (dash === true) i.style.background =
+      `repeating-linear-gradient(90deg,${color} 0 4px,transparent 4px 7px)`;
+    s.appendChild(i); s.appendChild(document.createTextNode(name));
+    n.appendChild(s);
+  });
+}
+function tipFor(box){
+  const t = document.createElement('div');
+  t.className = 'tip'; box.appendChild(t);
+  return {
+    show(html, x, y){
+      t.innerHTML = html; t.style.display = 'block';
+      const bw = box.clientWidth;
+      t.style.left = Math.min(x + 14, bw - t.offsetWidth - 6) + 'px';
+      t.style.top = Math.max(0, y - t.offsetHeight - 10) + 'px';
+    },
+    hide(){ t.style.display = 'none'; }
+  };
+}
+function barPath(x, y0, y1, w, r){
+  r = Math.min(r, w/2, Math.abs(y0 - y1));
+  if (y1 <= y0)
+    return `M${x},${y0} L${x},${y1+r} Q${x},${y1} ${x+r},${y1} L${x+w-r},${y1} Q${x+w},${y1} ${x+w},${y1+r} L${x+w},${y0} Z`;
+  return `M${x},${y0} L${x},${y1-r} Q${x},${y1} ${x+r},${y1} L${x+w-r},${y1} Q${x+w},${y1} ${x+w},${y1-r} L${x+w},${y0} Z`;
+}
+function drawLine(path, delay){
+  if (REDUCED) return;
+  const L = path.getTotalLength();
+  path.style.transition = 'none';
+  path.style.strokeDasharray = L;
+  path.style.strokeDashoffset = L;
+  path.getBoundingClientRect();
+  path.style.transition = `stroke-dashoffset 1.1s ease ${delay||0}ms`;
+  path.style.strokeDashoffset = 0;
+}
+
+/* ============================================================ the model
+   The paper's own compact model: Table 2 constants, Eqs 4-9 scaffold,
+   Eqs 17-18 guards, Eq 26 correction with Table 8 constants. */
+const M = {
+  mu00:0.01, Vth0:0.18859, m:1.19241, DIBL:0.10314, Cox:0.03365,
+  L:15e-9, vsat:1e5, Esat:2e7, Vdd:1.2,
+  a0:1e-6, a2:0.06499, a3:0.07219, alphaT:-1.8, beta:2, S:1e-4, W:6e-8
+};
+function softplus(x, s){ const z = x/s; return z > 30 ? x : s*Math.log1p(Math.exp(z)); }
+function ids(Vgs, Vds, Tc, corrected){
+  const TR = (Tc + 273.15)/300.15, vt = 0.025852*TR;
+  const Vth = M.Vth0 - M.DIBL*Vds;
+  const arg = (Vgs - Vth)/(2*M.m*vt);
+  const Vgst = 2*M.m*vt*(arg > 30 ? arg : Math.log1p(Math.exp(arg)));
+  const Vdsat = Vgst*M.Esat*M.L/(Vgst + M.Esat*M.L);
+  const Vde = Vds*Vdsat/Math.sqrt(Vds*Vds + Vdsat*Vdsat + 1e-30);
+  const Q = M.Cox*Vgst*(1 - Vde/(2*(Vgst + 2*vt)));
+  const E = Vde/Math.sqrt(M.L*M.L + (Vde/M.Esat)*(Vde/M.Esat));
+  const muT = M.mu00*Math.pow(TR, M.alphaT);
+  const mu0 = muT/Math.pow(1 + Math.pow(muT*Math.abs(E)/M.vsat, M.beta), 1/M.beta);
+  let dmu = 0;
+  if (corrected) dmu = Math.sqrt(mu0*mu0 + M.a0) *
+    ((Vds/M.Vdd)/(TR*TR) - Math.log(TR + M.a2/(Vgs/M.Vdd + M.a3)));
+  return M.W*Q*softplus(mu0 + dmu, M.S)*E;
+}
+
+/* ============================================================ progress bar */
+addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const p = h.scrollTop/(h.scrollHeight - h.clientHeight);
+  document.getElementById('progress').style.width = (p*100).toFixed(2) + '%';
+}, {passive:true});
+
+/* ============================================================ film facade */
+(function(){
+  const f = document.getElementById('filmframe');
+  const play = () => {
+    const v = document.createElement('video');
+    v.src = 'assets/film.mp4'; v.controls = true; v.autoplay = true;
+    v.poster = 'assets/film-poster.png';
+    f.replaceChildren(v);
+    f.classList.add('live');
+  };
+  f.addEventListener('click', play);
+  f.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); play(); }
+  });
+})();
+
+/* ============================================================ anim: ghost */
+(function(){
+  const box = document.getElementById('anim-ghost');
+  const W = 940, H = 360;
+  const svg = svgIn(box, W, H, 700);
+  const panel = (x, title, color) => {
+    el('rect', {x, y:34, width:420, height:290, rx:8, fill:C.panel, stroke:C.line2}, svg);
+    txt(svg, x+20, 62, title, {'font-size':14, fill:C.muted, 'font-weight':600});
+    return x;
+  };
+  panel(30, 'PHYSICS SCAFFOLD (any variant, A1 / A4 / A8)');
+  panel(490, 'UNCONSTRAINED NETWORK (A2)');
+  txt(svg, 50, 108, 'current at Vds = 0 V', {'font-size':13.5, fill:C.faint});
+  txt(svg, 510, 108, 'current at Vds = 0 V', {'font-size':13.5, fill:C.faint});
+  const good = txt(svg, 50, 175, '0.00 A', {'font-size':52, fill:C.good, 'font-weight':700, class:'num'});
+  const bad = txt(svg, 510, 175, '0.0 mA', {'font-size':52, fill:C.hot, 'font-weight':700, class:'num'});
+  txt(svg, 50, 210, 'pinned by the charge term, for any network output', {'font-size':13, fill:C.muted});
+  txt(svg, 510, 210, 'invented from nothing: a 38.6 mA ghost current', {'font-size':13, fill:C.muted});
+  const okLines = ['newton iteration 1 ... ok', 'newton iteration 2 ... ok', 'newton iteration 3 ... ok', 'operating point found'];
+  const badLines = ['newton iteration 1 ... ok', 'newton iteration 2 ... residual rising', 'newton iteration 3 ... diverging', 'FATAL: no convergence'];
+  const ln = [], rn = [];
+  okLines.forEach((s,i)=>{ ln.push(txt(svg, 50, 248+i*22, s, {'font-size':13, fill: i<3?C.ink2:C.good, class:'num', opacity:0})); });
+  badLines.forEach((s,i)=>{ rn.push(txt(svg, 510, 248+i*22, s, {'font-size':13, fill: i<3?C.ink2:C.hot, class:'num', opacity:0})); });
+  function play(){
+    good.textContent = '0.00 A';
+    ln.concat(rn).forEach(n=>n.setAttribute('opacity',0));
+    tween(1400, p => { bad.textContent = (38.6*p).toFixed(1) + ' mA'; }, () => {
+      ln.forEach((n,i)=> setTimeout(()=>n.setAttribute('opacity',1), 150+i*260));
+      rn.forEach((n,i)=> setTimeout(()=>n.setAttribute('opacity',1), 150+i*260));
+    });
+  }
+  onSeen(box, play);
+  makeReplay(box, play);
+})();
+
+/* ============================================================ anim: ude */
+(function(){
+  const box = document.getElementById('anim-ude');
+  const W = 940, H = 330;
+  const svg = svgIn(box, W, H, 700);
+  const terms = [
+    ['Ids', 'current', 50], ['=', '', 128], ['W', 'width', 175],
+    ['x', '', 228], ['Qinv', 'charge', 272], ['x', '', 372], ['x', '', 836], ['Eeff', 'field', 870]
+  ];
+  const g = el('g', {}, svg);
+  const nodes = terms.map(([s, sub, x]) => {
+    const t = txt(g, x, 150, s, {'font-size':30, class:'num', opacity:0});
+    if (sub) txt(g, x, 180, sub, {'font-size':12.5, fill:C.muted, opacity:0, 'data-sub':x});
+    return t;
+  });
+  const subs = [...g.querySelectorAll('[data-sub]')];
+  const slot = el('rect', {x:408, y:95, width:410, height:120, rx:12, fill:'none',
+    stroke:C.slate, 'stroke-width':2, 'stroke-dasharray':'7 6', opacity:0}, svg);
+  const muP = txt(svg, 428, 150, '( μ_phys', {'font-size':27, class:'num', opacity:0});
+  const plus = txt(svg, 578, 150, '+', {'font-size':27, fill:C.slate, class:'num', opacity:0});
+  const dmu = txt(svg, 608, 150, 'Δμ_net )', {'font-size':27, fill:C.slate, class:'num', opacity:0});
+  const netG = el('g', {opacity:0}, svg);
+  const cols = [625, 668, 711, 750];
+  const rows = [[186, 214], [178, 200, 222], [178, 200, 222], [200]];
+  rows.slice(0,-1).forEach((col, ci) => col.forEach(y1 =>
+    rows[ci+1].forEach(y2 => el('line', {x1:cols[ci], y1, x2:cols[ci+1], y2,
+      stroke:C.slate, 'stroke-width':1, opacity:.4}, netG))));
+  rows.forEach((col, ci) => col.forEach(y =>
+    el('circle', {cx:cols[ci], cy:y, r:5, fill:C.panel, stroke:C.slate, 'stroke-width':1.6}, netG)));
+  const badge = (x, s, delayRef) => {
+    const bg = el('g', {opacity:0}, svg);
+    el('rect', {x, y:262, width:susWidth(s), height:38, rx:8, fill:'#1c7a5514', stroke:'#1c7a5566'}, bg);
+    txt(bg, x+16, 287, s, {'font-size':14.5, fill:C.good, class:'num'});
+    return bg;
+  };
+  function susWidth(s){ return 22 + s.length*8.6; }
+  const b1 = badge(180, 'Ids = 0 at zero bias, always');
+  const b2 = badge(480, 'smooth to every derivative');
+  function play(){
+    nodes.forEach(n=>n.setAttribute('opacity',0)); subs.forEach(n=>n.setAttribute('opacity',0));
+    [slot, muP, plus, dmu, netG, b1, b2].forEach(n=>n.setAttribute('opacity',0));
+    nodes.forEach((n,i)=> setTimeout(()=>{ n.setAttribute('opacity',1);
+      if (subs[i]) subs[i].setAttribute('opacity',1); }, 120+i*160));
+    subs.forEach((n,i)=> setTimeout(()=>n.setAttribute('opacity',1), 220+i*160));
+    setTimeout(()=>{ muP.setAttribute('opacity',1); }, 1500);
+    setTimeout(()=>{ slot.setAttribute('opacity',1); plus.setAttribute('opacity',1); }, 1900);
+    setTimeout(()=>{ dmu.setAttribute('opacity',1); netG.setAttribute('opacity',1); }, 2300);
+    setTimeout(()=>{ b1.setAttribute('opacity',1); }, 3000);
+    setTimeout(()=>{ b2.setAttribute('opacity',1); }, 3400);
+  }
+  onSeen(box, play);
+  makeReplay(box, play);
+})();
+
+/* ============================================================ fig: error bars */
+(function(){
+  const box = document.getElementById('fig-error');
+  const W = 940, H = 380, P = {l:70, r:20, t:30, b:64};
+  const svg = svgIn(box, W, H, 700);
+  const tip = tipFor(box);
+  const data = [
+    {k:'A1 physics only', v:70.33, c:C.shelf},
+    {k:'A3 linear loss', v:159.91, c:C.faint},
+    {k:'A4 neural UDE', v:11.01, c:C.slate},
+    {k:'A8 symbolic', v:12.38, c:C.good},
+    {k:'A9 half data', v:10.40, c:C.slate},
+    {k:'A10 extremes', v:6.57, c:C.slate},
+  ];
+  const ymax = 170;
+  const x = i => P.l + 30 + i*((W-P.l-P.r-60)/(data.length-1));
+  const y = v => H - P.b - (v/ymax)*(H-P.t-P.b);
+  [0,50,100,150].forEach(v => {
+    el('line', {x1:P.l, y1:y(v), x2:W-P.r, y2:y(v), stroke:C.line, 'stroke-width':1}, svg);
+    txt(svg, P.l-10, y(v)+5, v+'%', {'text-anchor':'end', 'font-size':12.5, fill:C.faint, class:'num'});
+  });
+  txt(svg, P.l, 20, 'held-out mean relative error', {'font-size':13, fill:C.muted});
+  const bw = 62;
+  data.forEach((d, i) => {
+    const p = el('path', {d:barPath(x(i)-bw/2, y(0), y(0), bw, 4), fill:d.c, opacity:.92}, svg);
+    txt(svg, x(i), H-P.b+22, d.k.split(' ')[0], {'text-anchor':'middle', 'font-size':13, fill:C.ink2, class:'num'});
+    txt(svg, x(i), H-P.b+40, d.k.split(' ').slice(1).join(' '), {'text-anchor':'middle', 'font-size':12, fill:C.muted});
+    const lab = txt(svg, x(i), y(d.v)-8, d.v.toFixed(2)+'%', {'text-anchor':'middle', 'font-size':13, fill:d.c, class:'num', opacity:0, 'font-weight':600});
+    p.addEventListener('mousemove', e => {
+      const r = box.getBoundingClientRect();
+      tip.show(`<b>${d.v.toFixed(2)}%</b> ${d.k}`, e.clientX-r.left, e.clientY-r.top);
+    });
+    p.addEventListener('mouseleave', tip.hide);
+    d._p = p; d._lab = lab;
+  });
+  function play(){
+    data.forEach((d, i) => {
+      d._lab.setAttribute('opacity', 0);
+      setTimeout(() => tween(700, q => {
+        d._p.setAttribute('d', barPath(x(i)-bw/2, y(0), y(d.v*q), bw, 4));
+      }, () => d._lab.setAttribute('opacity', 1)), i*130);
+    });
+  }
+  onSeen(box, play);
+  makeReplay(box, play);
+  legend('leg-error', [['physics alone', C.shelf], ['wrong loss', C.faint],
+    ['UDE variants', C.slate], ['deployed formula', C.good]]);
+  const note = document.createElement('div');
+  note.style.cssText = 'font:500 13px/1.5 var(--sans); color:var(--muted); margin-top:6px';
+  note.textContent = 'A2, the unconstrained MLP, is not drawable here: 2.06e7 percent, with a 38.6 mA zero-bias ghost current.';
+  box.appendChild(note);
+})();
+
+/* ============================================================ fig: transfer */
+(function(){
+  const box = document.getElementById('fig-transfer');
+  const W = 940, H = 400, P = {l:80, r:24, t:34, b:56};
+  const svg = svgIn(box, W, H, 700);
+  const tip = tipFor(box);
+  const IMAX = 110;
+  const xs = v => P.l + (v/0.7)*(W-P.l-P.r);
+  const ys = ua => H - P.b - (Math.min(ua, IMAX)/IMAX)*(H-P.t-P.b);
+  [20,40,60,80,100].forEach(v => {
+    el('line', {x1:P.l, y1:ys(v), x2:W-P.r, y2:ys(v), stroke:C.line}, svg);
+    txt(svg, P.l-10, ys(v)+5, v, {'text-anchor':'end', 'font-size':12.5, fill:C.faint, class:'num'});
+  });
+  el('line', {x1:P.l, y1:H-P.b, x2:W-P.r, y2:H-P.b, stroke:C.line2}, svg);
+  [0, 0.35, 0.7].forEach(v => txt(svg, xs(v), H-P.b+24, v.toFixed(2)+' V', {'text-anchor':'middle', 'font-size':12.5, fill:C.faint, class:'num'}));
+  txt(svg, P.l, 22, 'drive current, microamps, Vds = 0.6 V, 25 C', {'font-size':13, fill:C.muted});
+  const mk = corr => {
+    let d = '';
+    for (let i = 0; i <= 70; i++){
+      const v = 0.7*i/70;
+      d += (i? ' L':'M') + xs(v).toFixed(1) + ' ' + ys(ids(v, 0.6, 25, corr)*1e6).toFixed(1);
+    }
+    return d;
+  };
+  const base = el('path', {d:mk(false), stroke:C.shelf, 'stroke-width':3.5, fill:'none', 'stroke-dasharray':'9 8'}, svg);
+  const corr = el('path', {d:mk(true), stroke:C.slate, 'stroke-width':4, fill:'none'}, svg);
+  const hover = el('rect', {x:P.l, y:P.t, width:W-P.l-P.r, height:H-P.t-P.b, fill:'transparent'}, svg);
+  hover.addEventListener('mousemove', e => {
+    const r = box.getBoundingClientRect();
+    const sr = svg.getBoundingClientRect();
+    const v = Math.max(0, Math.min(0.7, (e.clientX - sr.left)*(W/sr.width) - P.l)/(W-P.l-P.r)*0.7);
+    const a = ids(v, 0.6, 25, false)*1e6, b = ids(v, 0.6, 25, true)*1e6;
+    tip.show(`Vgs <b>${v.toFixed(2)} V</b><br>scaffold <b>${a.toFixed(1)} uA</b> &middot; corrected <b>${b.toFixed(1)} uA</b>`, e.clientX-r.left, e.clientY-r.top);
+  });
+  hover.addEventListener('mouseleave', tip.hide);
+  function play(){ drawLine(base, 0); drawLine(corr, 350); }
+  onSeen(box, play);
+  makeReplay(box, play);
+  legend('leg-transfer', [['classical scaffold alone', C.shelf, true], ['scaffold + learned correction (deployed)', C.slate]]);
+})();
+
+/* ============================================================ fig: pareto */
+(function(){
+  const box = document.getElementById('fig-pareto');
+  const W = 940, H = 400, P = {l:86, r:26, t:34, b:56};
+  const svg = svgIn(box, W, H, 700);
+  const tip = tipFor(box);
+  const pts = [
+    {c:1, v:1.607e-5, e:'y = \u03bcCT'},
+    {c:2, v:2.231e-6, e:'y = ln(0.99997)'},
+    {c:3, v:1.808e-6, e:'y = -0.20810 \u03bcCT'},
+    {c:5, v:1.442e-6, e:'y = \u03bcCT (0.96342 - T)'},
+    {c:6, v:1.358e-6, e:'y = (Vds - ln T) \u03bcCT'},
+    {c:9, v:9.192e-7, e:'y = (Vds - (T - 0.788)) \u03bcCT/T'},
+    {c:11, v:8.265e-7, e:'+16.3% vs best: rejected'},
+    {c:15, v:7.367e-7, e:'+3.65% vs best: DEPLOYED', pick:true},
+    {c:17, v:7.108e-7, e:'best loss, more complexity'},
+  ];
+  const xs = c => P.l + (c/18)*(W-P.l-P.r);
+  const ys = v => {
+    const lo = Math.log10(6e-7), hi = Math.log10(2.4e-5);
+    return P.t + ((hi - Math.log10(v))/(hi-lo))*(H-P.t-P.b);
+  };
+  [1e-6, 1e-5].forEach(v => {
+    el('line', {x1:P.l, y1:ys(v), x2:W-P.r, y2:ys(v), stroke:C.line}, svg);
+    txt(svg, P.l-10, ys(v)+5, '1e'+Math.round(Math.log10(v)), {'text-anchor':'end', 'font-size':12.5, fill:C.faint, class:'num'});
+  });
+  el('line', {x1:P.l, y1:H-P.b, x2:W-P.r, y2:H-P.b, stroke:C.line2}, svg);
+  [0,5,10,15].forEach(c => txt(svg, xs(c), H-P.b+24, c, {'text-anchor':'middle', 'font-size':12.5, fill:C.faint, class:'num'}));
+  txt(svg, P.l, 22, 'residual loss vs the trained network (log scale)', {'font-size':13, fill:C.muted});
+  txt(svg, W-P.r, H-P.b+24, 'complexity', {'text-anchor':'end', 'font-size':12.5, fill:C.muted});
+  let d = '';
+  pts.forEach((p, i) => { d += (i? ' L':'M') + xs(p.c) + ' ' + ys(p.v); });
+  const line = el('path', {d, stroke:C.line2, 'stroke-width':2, fill:'none'}, svg);
+  const dots = pts.map(p => {
+    const g = el('g', {opacity:0}, svg);
+    el('circle', {cx:xs(p.c), cy:ys(p.v), r:7, fill:p.pick?C.slate:C.panel, stroke:p.pick?C.slate:C.ink2, 'stroke-width':2}, g);
+    txt(g, xs(p.c), ys(p.v)-14, p.c, {'text-anchor':'middle', 'font-size':12, fill:C.muted, class:'num'});
+    if (p.pick){
+      el('circle', {cx:xs(p.c), cy:ys(p.v), r:16, fill:'none', stroke:C.slate, 'stroke-width':2}, g);
+      txt(g, xs(p.c)-24, ys(p.v)-30, 'deployed: complexity 15', {'text-anchor':'end', 'font-size':13.5, fill:C.slate, 'font-weight':600});
+    }
+    const hit = el('circle', {cx:xs(p.c), cy:ys(p.v), r:16, fill:'transparent'}, g);
+    hit.addEventListener('mousemove', e => {
+      const r = box.getBoundingClientRect();
+      tip.show(`complexity <b>${p.c}</b> &middot; loss <b>${p.v.toExponential(2)}</b><br>${p.e}`, e.clientX-r.left, e.clientY-r.top);
+    });
+    hit.addEventListener('mouseleave', tip.hide);
+    return g;
+  });
+  function play(){
+    drawLine(line, 0);
+    dots.forEach((g, i) => { g.setAttribute('opacity', 0);
+      setTimeout(()=>g.setAttribute('opacity', 1), 200+i*140); });
+  }
+  onSeen(box, play);
+  makeReplay(box, play);
+})();
+
+/* ============================================================ anim: distill */
+(function(){
+  const box = document.getElementById('anim-distill');
+  const W = 940, H = 300;
+  const svg = svgIn(box, W, H, 700);
+  const netG = el('g', {}, svg);
+  const cols = [330, 420, 510, 596];
+  const rows = [[100, 160], [80, 130, 180], [80, 130, 180], [130]];
+  rows.slice(0,-1).forEach((col, ci) => col.forEach(y1 =>
+    rows[ci+1].forEach(y2 => el('line', {x1:cols[ci], y1, x2:cols[ci+1], y2,
+      stroke:'#6d5bd0', 'stroke-width':1.3, opacity:.4}, netG))));
+  rows.forEach((col, ci) => col.forEach(y =>
+    el('circle', {cx:cols[ci], cy:y, r:9, fill:C.panel, stroke:'#6d5bd0', 'stroke-width':2}, netG)));
+  const label = txt(svg, W/2, 40, 'the trained correction: 64 tanh units', {'text-anchor':'middle', 'font-size':14, fill:C.muted});
+  const eq = 'Δμ = sqrt(μCT² + 1e-6) · [ (Vds/1.2)/θT² - ln( θT + 0.06499/(Vgs/1.2 + 0.07219) ) ]';
+  const eqNode = txt(svg, W/2, 246, '', {'text-anchor':'middle', 'font-size':17.5, fill:C.ink, class:'num'});
+  function play(){
+    netG.setAttribute('opacity', 1);
+    label.textContent = 'the trained correction: 64 tanh units';
+    eqNode.textContent = '';
+    setTimeout(() => tween(1600, p => {
+      netG.setAttribute('opacity', (1-p).toFixed(3));
+      eqNode.textContent = eq.slice(0, Math.round(eq.length*p));
+    }, () => { label.textContent = 'the deployed correction: one line, zero parameters to run'; }), 700);
+  }
+  onSeen(box, play);
+  makeReplay(box, play);
+})();
+
+/* ============================================================ widget */
+(function(){
+  const box = document.getElementById('fig-widget');
+  const W = 940, H = 380, P = {l:80, r:24, t:34, b:56};
+  const svg = svgIn(box, W, H, 700);
+  const IMAX = 130;
+  const xs = v => P.l + (v/0.7)*(W-P.l-P.r);
+  const ys = ua => H - P.b - (Math.min(ua, IMAX)/IMAX)*(H-P.t-P.b);
+  [30,60,90,120].forEach(v => {
+    el('line', {x1:P.l, y1:ys(v), x2:W-P.r, y2:ys(v), stroke:C.line}, svg);
+    txt(svg, P.l-10, ys(v)+5, v, {'text-anchor':'end', 'font-size':12.5, fill:C.faint, class:'num'});
+  });
+  el('line', {x1:P.l, y1:H-P.b, x2:W-P.r, y2:H-P.b, stroke:C.line2}, svg);
+  [0, 0.35, 0.7].forEach(v => txt(svg, xs(v), H-P.b+24, v.toFixed(2)+' V', {'text-anchor':'middle', 'font-size':12.5, fill:C.faint, class:'num'}));
+  const title = txt(svg, P.l, 22, '', {'font-size':13, fill:C.muted});
+  const base = el('path', {stroke:C.shelf, 'stroke-width':3, fill:'none', 'stroke-dasharray':'9 8'}, svg);
+  const corr = el('path', {stroke:C.slate, 'stroke-width':4, fill:'none'}, svg);
+  const gap = txt(svg, W-P.r-6, P.t+18, '', {'text-anchor':'end', 'font-size':14, fill:C.slate, class:'num', 'font-weight':600});
+  function render(){
+    const T = +document.getElementById('wT').value;
+    const Vds = +document.getElementById('wVds').value;
+    document.getElementById('wTv').textContent = T + ' C';
+    document.getElementById('wVdsv').textContent = Vds.toFixed(2) + ' V';
+    title.textContent = `drive current, microamps, at Vds = ${Vds.toFixed(2)} V and ${T} C`;
+    const mk = c => {
+      let d = '';
+      for (let i = 0; i <= 70; i++){
+        const v = 0.7*i/70;
+        d += (i? ' L':'M') + xs(v).toFixed(1) + ' ' + ys(ids(v, Vds, T, c)*1e6).toFixed(1);
+      }
+      return d;
+    };
+    base.setAttribute('d', mk(false));
+    corr.setAttribute('d', mk(true));
+    const a = ids(0.7, Vds, T, false)*1e6, b = ids(0.7, Vds, T, true)*1e6;
+    gap.textContent = `correction at Vgs 0.7: ${(b-a) >= 0 ? '+' : ''}${(b-a).toFixed(1)} uA`;
+  }
+  ['wT','wVds'].forEach(id => document.getElementById(id).addEventListener('input', render));
+  render();
+})();
+
+/* ============================================================ fig: dc family */
+(function(){
+  const box = document.getElementById('fig-dc');
+  const W = 940, H = 420, P = {l:84, r:64, t:34, b:56};
+  const svg = svgIn(box, W, H, 700);
+  const IMAX = 340;
+  const xs = v => P.l + (v/1.2)*(W-P.l-P.r);
+  const ys = ua => H - P.b - (Math.min(ua, IMAX)/IMAX)*(H-P.t-P.b);
+  el('rect', {x:xs(0.7), y:P.t, width:xs(1.2)-xs(0.7), height:H-P.t-P.b, fill:C.sink}, svg);
+  txt(svg, xs(0.95), P.t+20, 'beyond training data:', {'text-anchor':'middle', 'font-size':12.5, fill:C.faint});
+  txt(svg, xs(0.95), P.t+37, 'robustness only', {'text-anchor':'middle', 'font-size':12.5, fill:C.faint});
+  [100,200,300].forEach(v => {
+    el('line', {x1:P.l, y1:ys(v), x2:W-P.r, y2:ys(v), stroke:C.line}, svg);
+    txt(svg, P.l-10, ys(v)+5, v, {'text-anchor':'end', 'font-size':12.5, fill:C.faint, class:'num'});
+  });
+  el('line', {x1:P.l, y1:H-P.b, x2:W-P.r, y2:H-P.b, stroke:C.line2}, svg);
+  [0, 0.35, 0.7, 1.2].forEach(v => txt(svg, xs(v), H-P.b+24, v.toFixed(2), {'text-anchor':'middle', 'font-size':12.5, fill:C.faint, class:'num'}));
+  txt(svg, P.l, 22, 'drain current, microamps', {'font-size':13, fill:C.muted});
+  txt(svg, W-P.r, H-P.b+42, 'Vds (V)', {'text-anchor':'end', 'font-size':12.5, fill:C.muted});
+  const gates = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2];
+  const paths = gates.map((vg, gi) => {
+    let d = '';
+    for (let i = 0; i <= 80; i++){
+      const v = 1.2*i/80;
+      d += (i? ' L':'M') + xs(v).toFixed(1) + ' ' + ys(ids(vg, v, 25, true)*1e6).toFixed(1);
+    }
+    const p = el('path', {d, stroke:C.slate, 'stroke-width':3.2, fill:'none',
+      opacity:.35 + .65*gi/(gates.length-1)}, svg);
+    txt(svg, W-P.r+8, ys(ids(vg, 1.2, 25, true)*1e6)+5, vg.toFixed(1)+' V',
+      {'font-size':12, fill:C.muted, class:'num'});
+    return p;
+  });
+  function play(){ paths.forEach((p, i) => drawLine(p, i*160)); }
+  onSeen(box, play);
+  makeReplay(box, play);
+  legend('leg-dc', [['deployed formula at 25 C, gate steps of 0.2 V', C.slate]]);
+})();
+
+/* ============================================================ anim: pipeline */
+(function(){
+  const box = document.getElementById('anim-pipeline');
+  const W = 940, H = 240;
+  const svg = svgIn(box, W, H, 700);
+  const stages = [
+    ['MESD N3A', '175 trajectories'],
+    ['scaffold', 'drift-diffusion'],
+    ['PSO', 'anchor physics'],
+    ['train', 'Adam + L-BFGS'],
+    ['distill', 'PySR search'],
+    ['SPICE', 'DC + transient'],
+  ];
+  const bw = 128, gapx = (W - 60 - stages.length*bw)/(stages.length-1);
+  const nodes = stages.map(([a, b], i) => {
+    const x = 30 + i*(bw+gapx);
+    const g = el('g', {opacity:.25}, svg);
+    el('rect', {x, y:80, width:bw, height:76, rx:8, fill:C.panel, stroke:C.line2, 'stroke-width':1.5}, g);
+    txt(g, x+bw/2, 112, a, {'text-anchor':'middle', 'font-size':15.5, 'font-weight':600, fill:C.ink});
+    txt(g, x+bw/2, 136, b, {'text-anchor':'middle', 'font-size':12, fill:C.muted});
+    if (i < stages.length-1)
+      el('path', {d:`M ${x+bw+6} 118 H ${x+bw+gapx-10} M ${x+bw+gapx-18} 111 L ${x+bw+gapx-8} 118 L ${x+bw+gapx-18} 125`,
+        stroke:C.faint, 'stroke-width':2, fill:'none'}, g);
+    return g;
+  });
+  const pulse = el('circle', {cx:30+bw/2, cy:60, r:7, fill:C.slate, opacity:0}, svg);
+  const out = txt(svg, W/2, 210, '', {'text-anchor':'middle', 'font-size':14.5, fill:C.good, class:'num'});
+  function play(){
+    nodes.forEach(n=>n.setAttribute('opacity',.25));
+    out.textContent = '';
+    pulse.setAttribute('opacity',1);
+    tween(3400, p => {
+      const i = Math.min(stages.length-1, Math.floor(p*stages.length));
+      pulse.setAttribute('cx', 30 + i*(bw+gapx) + bw/2);
+      nodes.forEach((n, j) => n.setAttribute('opacity', j <= i ? 1 : .25));
+    }, () => {
+      pulse.setAttribute('opacity',0);
+      out.textContent = 'deployed: one formula, no network, 12.38% held-out error';
+    });
+  }
+  onSeen(box, play);
+  makeReplay(box, play);
+})();
+</script>
+</body>
+</html>
